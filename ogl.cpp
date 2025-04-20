@@ -95,6 +95,24 @@ void gl::ShaderProgram::unbind() {
 	glUseProgram(0);
 }
 
+GLint gl::ShaderProgram::get_uniform_location(const std::string& name) {
+	if(auto it = uniforms_cache.find(name); it != uniforms_cache.end())
+		return it->second;
+	auto loc = glGetUniformLocation(id, name.c_str());
+	if(loc > 0)
+		uniforms_cache[name]=loc;
+	return loc;
+}
+
+GLint gl::ShaderProgram::get_attribute_location(const std::string& name) {
+	if(auto it = attributes_cache.find(name); it != attributes_cache.end())
+		return it->second;
+	auto loc = glGetAttribLocation(id, name.c_str());
+	if(loc > 0)
+		attributes_cache[name]=loc;
+	return loc;
+}
+
 gl::ShaderProgram gl::ShaderProgram::make(Shader& vs, Shader& fs) {
 	ShaderProgram prog{};
 	glAttachShader(prog.id, vs.id);
@@ -110,3 +128,25 @@ gl::ShaderProgram gl::ShaderProgram::make(Shader& vs, Shader& fs) {
 	}
 	return prog;
 }
+
+
+gl::Texture::Texture()
+: id{0}
+{
+	glGenTextures(1, &id);
+	std::cout << "Texture created "<< id <<"\n";
+}
+
+gl::Texture::~Texture(){
+	glDeleteTextures(1, &id);
+	std::cout << "Texture deleted "<< id <<"\n";
+}
+
+void gl::Texture::bind(GLuint slot){
+	glActiveTexture(GL_TEXTURE0 + slot);
+	glBindTexture(GL_TEXTURE_2D, id);
+}
+void gl::Texture::unbind(){
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+

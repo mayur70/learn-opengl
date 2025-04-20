@@ -9,6 +9,7 @@ set(GLFW_BUILD_TESTS OFF)
 set(GLFW_BUILD_DOCS OFF)
 add_subdirectory("external/glfw" EXCLUDE_FROM_ALL)
 add_subdirectory("external/glad" EXCLUDE_FROM_ALL)
+add_subdirectory("external/stb_image" EXCLUDE_FROM_ALL)
 
 add_executable(learn-opengl
 	main.cpp
@@ -21,6 +22,7 @@ target_link_libraries(learn-opengl
 	PRIVATE
 	glfw
 	Glad
+	StbImage
 )
 
 add_custom_command(TARGET learn-opengl POST_BUILD
