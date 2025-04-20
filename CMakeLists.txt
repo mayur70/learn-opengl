@@ -19,6 +19,11 @@ target_link_libraries(learn-opengl
 	Glad
 )
 
+add_custom_command(TARGET learn-opengl POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/res
+    $<TARGET_FILE_DIR:learn-opengl>/res
+)
 set_property(TARGET learn-opengl
 	PROPERTY CMAKE_CXX_STANDARD 20
 )
