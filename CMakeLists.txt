@@ -12,6 +12,10 @@ add_subdirectory("external/glad" EXCLUDE_FROM_ALL)
 
 add_executable(learn-opengl
 	main.cpp
+	ogl.hpp
+	ogl.cpp
+	platform.hpp
+	platform.cpp
 )
 target_link_libraries(learn-opengl
 	PRIVATE

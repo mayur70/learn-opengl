@@ -1,164 +1,49 @@
 #include <iostream>
-#include <memory>
-#include <string>
-#include <fstream>
-#include <sstream>
+#include <array>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
 
+#include "ogl.hpp"
+#include "platform.hpp"
+
 constexpr int width = 800;
 constexpr int height = 600;
 
-namespace glfw3 {
-using Window = std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)>;
-Window make_window(GLFWwindow* handle) {
-	return Window{handle, glfwDestroyWindow};
-}
-}
-
-namespace gl {
-
-bool check_errors(const char* filename, long line) {
-	bool is_err = false;
-	GLenum err = GL_NO_ERROR;
-	while((err = glGetError()) != GL_NO_ERROR) {
-		std::cerr << "GL error "<< err << " at " << filename << ":"<< line<<"\n";
-		is_err = true;
-	}
-	return is_err;
-}
-
-struct Buffer {
-	GLuint id;
-	GLenum target;
-	Buffer(GLenum target, GLenum usage, GLsizeiptr size, GLvoid* data)
-	:id{0},target{target}
-	{
-		glGenBuffers(1, &id);
-		bind();
-		glBufferData(target, size, data, usage);
-		std::cout << "Buffer created "<< id <<"\n";
-	}
-
-	~Buffer() {
-		glDeleteBuffers(1, &id);
-		std::cout << "Buffer deleted "<< id <<"\n";
-	}
-
-	void bind() {
-		glBindBuffer(target, id);
-	}
-	void unbind() {
-		glBindBuffer(target, 0);
-	}
+struct Vector4 {
+	float x, y, z, w;
+};
+struct Vector3 {
+	float x, y, z;
 };
 
-struct VertexArray {
-	GLuint id;
-	VertexArray() {
-		glGenVertexArrays(1, &id);
-		std::cout << "VertexArray created "<< id <<"\n";
-	}
-	~VertexArray() {
-		glDeleteVertexArrays(1, &id);
-		std::cout << "VertexArray deleted "<< id <<"\n";
-	}
-
-	void bind() {
-		glBindVertexArray(id);
-	}
-	void unbind() {
-		glBindVertexArray(0);
+struct VertexElementLayout {
+	GLint size;
+	GLenum type;
+	GLboolean normalized;
+	GLsizei stride;
+	const void* offset;
+};
+struct Vertex {
+	Vector3 position;
+	Vector4 color;
+	
+	static std::array<VertexElementLayout, 2> get_layout() {
+		std::array<VertexElementLayout, 2> layout{};
+		layout[0].size = 3;
+		layout[0].type = GL_FLOAT;
+		layout[0].normalized = GL_FALSE;
+		layout[0].stride = sizeof(Vertex);
+		layout[0].offset = (const void*)offsetof(Vertex, position);
+		layout[1].size = 4;
+		layout[1].type = GL_FLOAT;
+		layout[1].normalized = GL_FALSE;
+		layout[1].stride = sizeof(Vertex);
+		layout[1].offset = (const void*)offsetof(Vertex, color);
+		return layout;
 	}
 };
-
-struct Shader {
-	GLuint id;
-	Shader(GLenum type)
-	:id{glCreateShader(type)}
-	{
-		std::cout << "Shader created "<< id <<"\n";
-	}
-
-	~Shader()
-	{
-		glDeleteShader(id);
-		std::cout << "Shader deleted "<< id <<"\n";
-	}
-
-	static Shader make(GLenum type, const std::string& source) {
-		Shader s{type};
-		const char* src = source.c_str();
-		glShaderSource(s.id, 1, &src, nullptr);
-		glCompileShader(s.id);
-		int success;
-		char info_log[512];
-		glGetShaderiv(s.id, GL_COMPILE_STATUS, &success);
-		if(!success) {
-			glGetShaderInfoLog(s.id, 512, nullptr, info_log);
-			std::cerr << "failed to compile shader (" << type << ") : " << info_log << "\n";
-			std::abort();
-		}
-		return s;
-	}
-};
-
-struct ShaderProgram {
-	GLuint id;
-	ShaderProgram() 
-	:id{glCreateProgram()}
-	{
-		std::cout << "ShaderProgram created "<< id <<"\n";
-	}
-	~ShaderProgram() {
-		glDeleteProgram(id);
-		std::cout << "ShaderProgram deleted "<< id <<"\n";
-	}
-
-	void bind() {
-		glUseProgram(id);
-	}
-
-	void unbind() {
-		glUseProgram(0);
-	}
-
-	static ShaderProgram make(Shader& vs, Shader& fs) {
-		ShaderProgram prog{};
-		glAttachShader(prog.id, vs.id);
-		glAttachShader(prog.id, fs.id);
-		glLinkProgram(prog.id);
-		int success;
-		char info_log[512];
-		glGetProgramiv(prog.id, GL_LINK_STATUS, &success);
-		if(!success) {
-			glGetProgramInfoLog(prog.id, 512, nullptr, info_log);
-			std::cerr << "failed to link shaders " << info_log << "\n";
-			std::abort();
-		}
-		return prog;
-	}
-};
-}
-
-namespace fs {
-std::string read_all(std::string_view filepath) {
-	std::ifstream file;
-	file.open(filepath.data());
-	std::stringstream ss;
-	ss << file.rdbuf();
-	file.close();
-	return ss.str();
-}
-}
-
-#define GLC(x) \
-do { \
-	x; \
-	gl::check_errors(__FILE__, __LINE__); \
-} while(0);
 
 void framebuffer_size_callback([[maybe_unused]] GLFWwindow* win, int w, int h) {
 	glViewport(0, 0, w, h);
@@ -197,21 +82,34 @@ int main([[maybe_unused]] int argc,[[maybe_unused]] char* argv[]) {
 		auto vs = gl::Shader::make(GL_VERTEX_SHADER, vsrc);
 		auto fs = gl::Shader::make(GL_FRAGMENT_SHADER, fsrc);
 		auto shader_program = gl::ShaderProgram::make(vs, fs);
-		float vertices[] = {
-			-0.5f, -0.5f, 0.0f,
-			0.5f, -0.5f, 0.0f,
-			0.0f,  0.5f, 0.0f
-		};  
+
+		std::array<Vertex, 4> vertices{
+			Vertex{{0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+			Vertex{{0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+			Vertex{{-0.5f,-0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+			Vertex{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f, 1.0f}},
+		};
+
 		gl::check_errors(__FILE__, __LINE__);
 		gl::VertexArray vao{};
 		vao.bind();
-		gl::Buffer vbo{gl::Buffer(GL_ARRAY_BUFFER, GL_STATIC_DRAW, sizeof(vertices), vertices)};
+		gl::Buffer vbo{gl::Buffer(GL_ARRAY_BUFFER, GL_STATIC_DRAW, vertices.size() * sizeof(Vertex), vertices.data())};
+		unsigned int indices[] = {  // note that we start from 0!
+			0, 1, 3,   // first triangle
+			1, 2, 3    // second triangle
+		};  
+		gl::Buffer ebo{gl::Buffer{GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW, sizeof(indices), indices}};
 
 		gl::check_errors(__FILE__, __LINE__);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
-		glEnableVertexAttribArray(0);
+		const auto layout = Vertex::get_layout();
+		for(GLuint index = 0; index < layout.size(); index++) {
+			auto* el = &layout[index];
+			glVertexAttribPointer(index, el->size, el->type, el->normalized, el->stride, el->offset);
+			glEnableVertexAttribArray(index);
+		}
 		gl::check_errors(__FILE__, __LINE__);
-
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		while(!glfwWindowShouldClose(window.get())) {
 
 			glfwPollEvents();
@@ -222,8 +120,9 @@ int main([[maybe_unused]] int argc,[[maybe_unused]] char* argv[]) {
 
 			shader_program.bind();
 			vao.bind();
-			glDrawArrays(GL_TRIANGLES, 0, 3);
 
+			//glDrawArrays(GL_TRIANGLES, 0, 3);
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 			glfwSwapBuffers(window.get());
 		}
